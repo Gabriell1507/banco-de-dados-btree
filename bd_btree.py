@@ -2,6 +2,7 @@ import random
 import time
 import tracemalloc
 from faker import Faker
+import matplotlib.pyplot as plt
 
 fake = Faker()
 
@@ -39,12 +40,12 @@ class BTree:
         parent.children.insert(i + 1, z)
         parent.keys.insert(i, y.keys[t - 1])
 
-        z.keys = y.keys[t:(2 * t) - 1]
-        y.keys = y.keys[0:t - 1]
+        z.keys = y.keys[t:]
+        y.keys = y.keys[:t - 1]
 
         if not y.leaf:
-            z.children = y.children[t:(2 * t)]
-            y.children = y.children[0:t]
+            z.children = y.children[t:]
+            y.children = y.children[:t]
 
     def _insert_non_full(self, node, key):
         i = len(node.keys) - 1
@@ -84,11 +85,96 @@ class BTree:
         return False
 
     def delete(self, key, node=None):
-        node, idx = self.search(key)
-        if node:
-            node.keys.pop(idx)
-            return True
-        return False
+        if node is None:
+            node = self.root
+
+        self._delete_from_node(node, key)
+        if len(self.root.keys) == 0 and not self.root.leaf:
+            self.root = self.root.children[0]
+
+    def _delete_from_node(self, node, key):
+        t = self.t
+        if node.leaf:
+            if key in node.keys:
+                node.keys.remove(key)
+                return True
+            return False
+        
+        i = 0
+        while i < len(node.keys) and key > node.keys[i]:
+            i += 1
+
+        if i < len(node.keys) and key == node.keys[i]:
+            if len(node.children[i].keys) >= t:
+                pred = self._get_predecessor(node.children[i])
+                node.keys[i] = pred
+                self._delete_from_node(node.children[i], pred)
+            elif len(node.children[i + 1].keys) >= t:
+                succ = self._get_successor(node.children[i + 1])
+                node.keys[i] = succ
+                self._delete_from_node(node.children[i + 1], succ)
+            else:
+                self._merge_children(node, i)
+                self._delete_from_node(node.children[i], key)
+        else:
+            if i < len(node.children) and len(node.children[i].keys) == t - 1:
+                self._fill_child(node, i)
+            if i >= len(node.children):
+                i = len(node.children) - 1
+            self._delete_from_node(node.children[i], key)
+
+    def _get_predecessor(self, node):
+        while not node.leaf:
+            node = node.children[-1]
+        return node.keys[-1]
+
+    def _get_successor(self, node):
+        while not node.leaf:
+            node = node.children[0]
+        return node.keys[0]
+
+    def _merge_children(self, parent, i):
+        t = self.t
+        y = parent.children[i]
+        z = parent.children[i + 1]
+        y.keys.append(parent.keys[i])
+        y.keys.extend(z.keys)
+        if not y.leaf:
+            y.children.extend(z.children)
+        parent.keys.pop(i)
+        parent.children.pop(i + 1)
+
+    def _fill_child(self, parent, i):
+        t = self.t
+        if i > 0 and len(parent.children[i - 1].keys) >= t:
+            self._borrow_from_prev(parent, i)
+        elif i < len(parent.children) - 1 and len(parent.children[i + 1].keys) >= t:
+            self._borrow_from_next(parent, i)
+        else:
+            if i < len(parent.children) - 1:
+                self._merge_children(parent, i)
+            else:
+                self._merge_children(parent, i - 1)
+
+    def _borrow_from_prev(self, parent, i):
+        t = self.t
+        child = parent.children[i]
+        sibling = parent.children[i - 1]
+
+        child.keys.insert(0, parent.keys[i - 1])
+        if not child.leaf:
+            child.children.insert(0, sibling.children.pop())
+        parent.keys[i - 1] = sibling.keys.pop()
+
+    def _borrow_from_next(self, parent, i):
+        t = self.t
+        child = parent.children[i]
+        sibling = parent.children[i + 1]
+
+        child.keys.append(parent.keys[i])
+        if not child.leaf:
+            child.children.append(sibling.children.pop(0))
+        parent.keys[i] = sibling.keys.pop(0)
 
     def print_tree(self, node=None, level=0):
         if node is None:
@@ -132,7 +218,21 @@ def measure_performance(tree, operation, data, key=None, new_key=None):
     tracemalloc.stop()
     
     execution_time = end_time - start_time
-    return format_time(execution_time), current, peak
+    return execution_time, current, peak
+
+def plot_performance(sizes, times, operations, filename="performance.png"):
+    plt.figure(figsize=(12, 8))
+    
+    for operation in operations:
+        plt.plot(sizes, times[operation], marker='o', label=operation)
+    
+    plt.xlabel('Número de registros')
+    plt.ylabel('Tempo de execução (segundos)')
+    plt.title('Desempenho das operações CRUD em B-Tree')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(filename)
+    plt.close()
 
 def main():
     b_tree = BTree(3)
@@ -151,41 +251,71 @@ def main():
         if choice == 1:
             num_records = int(input("Quantos dados deseja inserir? "))
             data = generate_random_data(num_records)
-            formatted_time, current, peak = measure_performance(b_tree, "INSERT", data)
-            print(f"{num_records} registros inseridos em {formatted_time}")
+            execution_time, current, peak = measure_performance(b_tree, "INSERT", data)
+            print(f"Tempo para inserção: {format_time(execution_time)}")
+            print(f"Memória utilizada: {current / 10**6:.2f}MB; Memória máxima: {peak / 10**6:.2f}MB")
+        
         elif choice == 2:
-            print("Exibindo todos os dados:")
-            b_tree.print_tree()
+            search_key = input("Digite a chave para buscar: ")
+            node, index = b_tree.search(search_key)
+            if node:
+                print(f"Chave {search_key} encontrada no nó com chaves: {node.keys}")
+            else:
+                print(f"Chave {search_key} não encontrada.")
+        
         elif choice == 3:
-            old_key = input("Digite o nome atual: ")
-            new_key = fake.unique.name()
+            old_key = input("Digite a chave antiga: ")
+            new_key = input("Digite a nova chave: ")
             if b_tree.update(old_key, new_key):
-                print(f"Registro {old_key} atualizado para {new_key}")
+                print(f"Chave {old_key} atualizada para {new_key}.")
             else:
-                print(f"Registro {old_key} não encontrado")
+                print(f"Chave {old_key} não encontrada.")
+        
         elif choice == 4:
-            key = input("Digite o nome a ser deletado: ")
-            if b_tree.delete(key):
-                print(f"Registro {key} deletado")
-            else:
-                print(f"Registro {key} não encontrado")
+            delete_key = input("Digite a chave para deletar: ")
+            b_tree.delete(delete_key)
+            print(f"Chave {delete_key} deletada.")
+        
         elif choice == 5:
-            sizes = [100, 1000, 10000]
-            operations = ["INSERT", "SELECT", "UPDATE", "DELETE"]
+            sizes = [10**i for i in range(1, 6)]
+            times = {"INSERT": [], "SELECT": [], "UPDATE": [], "DELETE": []}
+            memory_usage = {"INSERT": [], "SELECT": [], "UPDATE": [], "DELETE": []}
+            
             for size in sizes:
+                print(f"\nAvaliando desempenho com {size} registros:")
                 data = generate_random_data(size)
-                for operation in operations:
-                    print(f"\nAvaliando desempenho para {operation} com {size} registros:")
-                    if operation == "UPDATE":
-                        formatted_time, current, peak = measure_performance(b_tree, operation, data, new_key=fake.unique.name())
-                    else:
-                        formatted_time, current, peak = measure_performance(b_tree, operation, data)
-                    print(f"Tempo de execução: {formatted_time}")
-                    print(f"Memória atual: {current / 1024:.2f} KB; Pico de memória: {peak / 1024:.2f} KB")
+                
+                for operation in ["INSERT", "SELECT", "UPDATE", "DELETE"]:
+                    key = data[0] if operation != "INSERT" else None
+                    new_key = "NovoNome" if operation == "UPDATE" else None
+                    execution_time, current, peak = measure_performance(b_tree, operation, data, key, new_key)
+                    times[operation].append(execution_time)
+                    memory_usage[operation].append(peak / 10**6)
+                    print(f"{operation}: Tempo: {format_time(execution_time)}, Memória máxima: {peak / 10**6:.2f}MB")
+            
+            plot_performance(sizes, times, ["INSERT", "SELECT", "UPDATE", "DELETE"])
+            print("Gráfico de desempenho gerado: performance.png")
+            
+            # Plotar o uso de memória
+            plt.figure(figsize=(12, 8))
+            for operation in ["INSERT", "SELECT", "UPDATE", "DELETE"]:
+                plt.plot(sizes, memory_usage[operation], marker='o', label=operation)
+            
+            plt.xlabel('Número de registros')
+            plt.ylabel('Memória máxima (MB)')
+            plt.title('Uso de memória das operações CRUD em B-Tree')
+            plt.legend()
+            plt.grid(True)
+            plt.savefig("memory_usage.png")
+            plt.close()
+            print("Gráfico de uso de memória gerado: memory_usage.png")
+        
         elif choice == 6:
+            print("Saindo...")
             break
+        
         else:
-            print("Escolha inválida. Tente novamente.")
+            print("Opção inválida. Tente novamente.")
 
 if __name__ == "__main__":
     main()
