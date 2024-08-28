@@ -284,6 +284,11 @@ def plot_performance(sizes, times, operations):
 def main():
     db = Database()
     
+    # Cria uma tabela padrão para avaliação de desempenho
+    default_table_name = "default_table"
+    default_btree_order = 3
+    db.create_table(default_table_name, default_btree_order)
+    
     while True:
         print("\nEscolha uma operação:")
         print("1. Criar Tabela")
@@ -330,6 +335,8 @@ def main():
                 print(f"Registro {key} deletado.")
         
         elif choice == 6:
+            # Usa a tabela padrão para avaliação de desempenho
+            table = db.get_table(default_table_name)
             sizes = [100, 500, 1000, 5000, 10000]
             times = {"INSERT": [], "SELECT": [], "UPDATE": [], "DELETE": []}
             operations = ["INSERT", "SELECT", "UPDATE", "DELETE"]
