@@ -176,12 +176,28 @@ class BTree:
             child.children.append(sibling.children.pop(0))
         parent.keys[i] = sibling.keys.pop(0)
 
-    def print_tree(self, node=None, level=0):
+    def print_tree(self, node=None, level=0, indent="    "):
         if node is None:
             node = self.root
-        print(f"Nível {level} Chaves:", node.keys)
-        for child in node.children:
-            self.print_tree(child, level + 1)
+        print(f"{indent * level}Nível {level} Chaves: {node.keys}")
+        for i, child in enumerate(node.children):
+            self.print_tree(child, level + 1, indent)
+
+
+    def inorder_traversal(self, node=None, result=None):
+        if node is None:
+            node = self.root
+        if result is None:
+            result = []
+        i = 0
+        while i < len(node.keys):
+            if not node.leaf:
+                self.inorder_traversal(node.children[i], result)
+            result.append(node.keys[i])
+            i += 1
+        if not node.leaf:
+            self.inorder_traversal(node.children[i], result)
+        return result
 
 def generate_random_data(n):
     return [fake.unique.name() for _ in range(n)]
@@ -240,7 +256,7 @@ def main():
     while True:
         print("\nEscolha uma operação CRUD:")
         print("1. Inserir")
-        print("2. Selecionar")
+        print("2. Selecionar (Exibir a árvore)")
         print("3. Atualizar")
         print("4. Deletar")
         print("5. Avaliar Desempenho")
@@ -249,73 +265,54 @@ def main():
         choice = int(input("Digite o número da operação: "))
         
         if choice == 1:
-            num_records = int(input("Quantos dados deseja inserir? "))
-            data = generate_random_data(num_records)
-            execution_time, current, peak = measure_performance(b_tree, "INSERT", data)
-            print(f"Tempo para inserção: {format_time(execution_time)}")
-            print(f"Memória utilizada: {current / 10**6:.2f}MB; Memória máxima: {peak / 10**6:.2f}MB")
-        
+            n = int(input("Quantos registros deseja inserir? "))
+            data = generate_random_data(n)
+            for item in data:
+                b_tree.insert(item)
+            print(f"{n} registros inseridos com sucesso.")
         elif choice == 2:
-            search_key = input("Digite a chave para buscar: ")
-            node, index = b_tree.search(search_key)
-            if node:
-                print(f"Chave {search_key} encontrada no nó com chaves: {node.keys}")
-            else:
-                print(f"Chave {search_key} não encontrada.")
-        
+            print("Estrutura da B-Tree:")
+            b_tree.print_tree()
         elif choice == 3:
-            old_key = input("Digite a chave antiga: ")
-            new_key = input("Digite a nova chave: ")
+            old_key = input("Digite o valor antigo: ")
+            new_key = input("Digite o novo valor: ")
             if b_tree.update(old_key, new_key):
-                print(f"Chave {old_key} atualizada para {new_key}.")
+                print(f"Registro {old_key} atualizado para {new_key}.")
             else:
-                print(f"Chave {old_key} não encontrada.")
-        
+                print("Registro não encontrado.")
         elif choice == 4:
-            delete_key = input("Digite a chave para deletar: ")
-            b_tree.delete(delete_key)
-            print(f"Chave {delete_key} deletada.")
-        
+            key = input("Digite o valor a ser deletado: ")
+            b_tree.delete(key)
+            print(f"Registro {key} deletado.")
         elif choice == 5:
-            sizes = [10**i for i in range(1, 6)]
+            sizes = [100, 500, 1000, 5000, 10000]
             times = {"INSERT": [], "SELECT": [], "UPDATE": [], "DELETE": []}
-            memory_usage = {"INSERT": [], "SELECT": [], "UPDATE": [], "DELETE": []}
-            
+            operations = ["INSERT", "SELECT", "UPDATE", "DELETE"]
+
             for size in sizes:
-                print(f"\nAvaliando desempenho com {size} registros:")
                 data = generate_random_data(size)
+                new_data = generate_random_data(size)
                 
-                for operation in ["INSERT", "SELECT", "UPDATE", "DELETE"]:
-                    key = data[0] if operation != "INSERT" else None
-                    new_key = "NovoNome" if operation == "UPDATE" else None
-                    execution_time, current, peak = measure_performance(b_tree, operation, data, key, new_key)
+                for operation in operations:
+                    if operation == "INSERT":
+                        execution_time, current, peak = measure_performance(b_tree, operation, data)
+                    elif operation == "SELECT":
+                        execution_time, current, peak = measure_performance(b_tree, operation, data)
+                    elif operation == "UPDATE":
+                        execution_time, current, peak = measure_performance(b_tree, operation, data, new_key=new_data[0])
+                    elif operation == "DELETE":
+                        execution_time, current, peak = measure_performance(b_tree, operation, data)
+                    
                     times[operation].append(execution_time)
-                    memory_usage[operation].append(peak / 10**6)
-                    print(f"{operation}: Tempo: {format_time(execution_time)}, Memória máxima: {peak / 10**6:.2f}MB")
-            
-            plot_performance(sizes, times, ["INSERT", "SELECT", "UPDATE", "DELETE"])
-            print("Gráfico de desempenho gerado: performance.png")
-            
-            # Plotar o uso de memória
-            plt.figure(figsize=(12, 8))
-            for operation in ["INSERT", "SELECT", "UPDATE", "DELETE"]:
-                plt.plot(sizes, memory_usage[operation], marker='o', label=operation)
-            
-            plt.xlabel('Número de registros')
-            plt.ylabel('Memória máxima (MB)')
-            plt.title('Uso de memória das operações CRUD em B-Tree')
-            plt.legend()
-            plt.grid(True)
-            plt.savefig("memory_usage.png")
-            plt.close()
-            print("Gráfico de uso de memória gerado: memory_usage.png")
-        
+                    print(f"Operação {operation} para {size} registros: {format_time(execution_time)} - Memória usada: {current / 1024:.2f} KB, Pico: {peak / 1024:.2f} KB")
+
+            plot_performance(sizes, times, operations)
+            print("Avaliação de desempenho concluída. Gráfico salvo como 'performance.png'.")
         elif choice == 6:
             print("Saindo...")
             break
-        
         else:
-            print("Opção inválida. Tente novamente.")
+            print("Escolha inválida. Tente novamente.")
 
 if __name__ == "__main__":
     main()
