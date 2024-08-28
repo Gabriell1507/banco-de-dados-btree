@@ -183,7 +183,6 @@ class BTree:
         for i, child in enumerate(node.children):
             self.print_tree(child, level + 1, indent)
 
-
     def inorder_traversal(self, node=None, result=None):
         if node is None:
             node = self.root
@@ -199,6 +198,40 @@ class BTree:
             self.inorder_traversal(node.children[i], result)
         return result
 
+class Table:
+    def __init__(self, name, btree_order):
+        self.name = name
+        self.btree = BTree(btree_order)
+
+    def insert(self, key):
+        self.btree.insert(key)
+
+    def search(self, key):
+        return self.btree.search(key)
+
+    def update(self, old_key, new_key):
+        return self.btree.update(old_key, new_key)
+
+    def delete(self, key):
+        self.btree.delete(key)
+
+    def print_tree(self):
+        self.btree.print_tree()
+
+class Database:
+    def __init__(self):
+        self.tables = {}
+
+    def create_table(self, name, btree_order):
+        if name not in self.tables:
+            self.tables[name] = Table(name, btree_order)
+            print(f"Tabela '{name}' criada com sucesso.")
+        else:
+            print(f"Tabela '{name}' já existe.")
+
+    def get_table(self, name):
+        return self.tables.get(name, None)
+
 def generate_random_data(n):
     return [fake.unique.name() for _ in range(n)]
 
@@ -212,79 +245,91 @@ def format_time(seconds):
     else:
         return f"{seconds / 60:.2f} minutos"
 
-def measure_performance(tree, operation, data, key=None, new_key=None):
+def measure_performance(table, operation, data, key=None, new_key=None):
     tracemalloc.start()
     start_time = time.time()
     
     if operation == "INSERT":
         for item in data:
-            tree.insert(item)
+            table.insert(item)
     elif operation == "SELECT":
         for item in data:
-            tree.search(item)
+            table.search(item)
     elif operation == "UPDATE":
         for item in data:
-            tree.update(item, new_key)
+            table.update(item, new_key)
     elif operation == "DELETE":
         for item in data:
-            tree.delete(item)
+            table.delete(item)
     
     end_time = time.time()
     current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    
+
     execution_time = end_time - start_time
     return execution_time, current, peak
 
-def plot_performance(sizes, times, operations, filename="performance.png"):
-    plt.figure(figsize=(12, 8))
-    
+def plot_performance(sizes, times, operations):
+    plt.figure(figsize=(10, 6))
     for operation in operations:
-        plt.plot(sizes, times[operation], marker='o', label=operation)
-    
-    plt.xlabel('Número de registros')
-    plt.ylabel('Tempo de execução (segundos)')
-    plt.title('Desempenho das operações CRUD em B-Tree')
+        plt.plot(sizes, times[operation], label=operation)
+    plt.xlabel('Número de Registros')
+    plt.ylabel('Tempo (segundos)')
+    plt.title('Desempenho das Operações CRUD')
     plt.legend()
     plt.grid(True)
-    plt.savefig(filename)
-    plt.close()
+    plt.savefig('performance.png')
+    plt.show()
 
 def main():
-    b_tree = BTree(3)
+    db = Database()
     
     while True:
-        print("\nEscolha uma operação CRUD:")
-        print("1. Inserir")
-        print("2. Selecionar (Exibir a árvore)")
-        print("3. Atualizar")
-        print("4. Deletar")
-        print("5. Avaliar Desempenho")
-        print("6. Sair")
+        print("\nEscolha uma operação:")
+        print("1. Criar Tabela")
+        print("2. Inserir em Tabela")
+        print("3. Selecionar (Exibir a árvore)")
+        print("4. Atualizar em Tabela")
+        print("5. Deletar de Tabela")
+        print("6. Avaliar Desempenho")
+        print("7. Sair")
         
         choice = int(input("Digite o número da operação: "))
         
         if choice == 1:
-            n = int(input("Quantos registros deseja inserir? "))
-            data = generate_random_data(n)
-            for item in data:
-                b_tree.insert(item)
-            print(f"{n} registros inseridos com sucesso.")
-        elif choice == 2:
-            print("Estrutura da B-Tree:")
-            b_tree.print_tree()
-        elif choice == 3:
-            old_key = input("Digite o valor antigo: ")
-            new_key = input("Digite o novo valor: ")
-            if b_tree.update(old_key, new_key):
-                print(f"Registro {old_key} atualizado para {new_key}.")
-            else:
-                print("Registro não encontrado.")
-        elif choice == 4:
-            key = input("Digite o valor a ser deletado: ")
-            b_tree.delete(key)
-            print(f"Registro {key} deletado.")
-        elif choice == 5:
+            table_name = input("Digite o nome da tabela: ")
+            btree_order = int(input("Digite a ordem da Árvore B: "))
+            db.create_table(table_name, btree_order)
+        
+        elif choice in [2, 3, 4, 5]:
+            table_name = input("Digite o nome da tabela: ")
+            table = db.get_table(table_name)
+            if table is None:
+                print("Tabela não encontrada.")
+                continue
+
+            if choice == 2:
+                n = int(input("Quantos registros deseja inserir? "))
+                data = generate_random_data(n)
+                for item in data:
+                    table.insert(item)
+                print(f"{n} registros inseridos com sucesso.")
+            elif choice == 3:
+                print("Estrutura da Árvore B da tabela:")
+                table.print_tree()
+            elif choice == 4:
+                old_key = input("Digite o valor antigo: ")
+                new_key = input("Digite o novo valor: ")
+                if table.update(old_key, new_key):
+                    print(f"Registro {old_key} atualizado para {new_key}.")
+                else:
+                    print("Registro não encontrado.")
+            elif choice == 5:
+                key = input("Digite o valor a ser deletado: ")
+                table.delete(key)
+                print(f"Registro {key} deletado.")
+        
+        elif choice == 6:
             sizes = [100, 500, 1000, 5000, 10000]
             times = {"INSERT": [], "SELECT": [], "UPDATE": [], "DELETE": []}
             operations = ["INSERT", "SELECT", "UPDATE", "DELETE"]
@@ -295,20 +340,21 @@ def main():
                 
                 for operation in operations:
                     if operation == "INSERT":
-                        execution_time, current, peak = measure_performance(b_tree, operation, data)
+                        execution_time, current, peak = measure_performance(table, operation, data)
                     elif operation == "SELECT":
-                        execution_time, current, peak = measure_performance(b_tree, operation, data)
+                        execution_time, current, peak = measure_performance(table, operation, data)
                     elif operation == "UPDATE":
-                        execution_time, current, peak = measure_performance(b_tree, operation, data, new_key=new_data[0])
+                        execution_time, current, peak = measure_performance(table, operation, data, new_key=new_data[0])
                     elif operation == "DELETE":
-                        execution_time, current, peak = measure_performance(b_tree, operation, data)
+                        execution_time, current, peak = measure_performance(table, operation, data)
                     
                     times[operation].append(execution_time)
                     print(f"Operação {operation} para {size} registros: {format_time(execution_time)} - Memória usada: {current / 1024:.2f} KB, Pico: {peak / 1024:.2f} KB")
 
             plot_performance(sizes, times, operations)
             print("Avaliação de desempenho concluída. Gráfico salvo como 'performance.png'.")
-        elif choice == 6:
+        
+        elif choice == 7:
             print("Saindo...")
             break
         else:
