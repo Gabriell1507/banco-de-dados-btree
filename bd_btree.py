@@ -3,6 +3,7 @@ import time
 import tracemalloc
 from faker import Faker
 import matplotlib.pyplot as plt
+import json
 
 fake = Faker()
 
@@ -218,6 +219,14 @@ class Table:
     def print_tree(self):
         self.btree.print_tree()
 
+    def inorder_traversal(self):
+        return self.btree.inorder_traversal()
+
+    def save_to_file(self, filename):
+        with open(filename, 'w') as f:
+            json.dump(self.inorder_traversal(), f)
+        print(f"Dados salvos em {filename}")
+
 class Database:
     def __init__(self):
         self.tables = {}
@@ -297,7 +306,8 @@ def main():
         print("4. Atualizar em Tabela")
         print("5. Deletar de Tabela")
         print("6. Avaliar Desempenho")
-        print("7. Sair")
+        print("7. Salvar dados da tabela em arquivo")
+        print("8. Sair")
         
         choice = int(input("Digite o número da operação: "))
         
@@ -314,14 +324,27 @@ def main():
                 continue
 
             if choice == 2:
-                n = int(input("Quantos registros deseja inserir? "))
-                data = generate_random_data(n)
-                for item in data:
-                    table.insert(item)
-                print(f"{n} registros inseridos com sucesso.")
+                insert_choice = input("Deseja inserir nomes gerados automaticamente pelo Faker? (s/n): ")
+                if insert_choice.lower() == 's':
+                    n = int(input("Quantos registros deseja inserir? "))
+                    data = generate_random_data(n)
+                    for item in data:
+                        table.insert(item)
+                    print(f"{n} registros inseridos com sucesso.")
+                else:
+                    while True:
+                        name = input("Digite o nome para inserir (ou 'sair' para parar): ")
+                        if name.lower() == 'sair':
+                            break
+                        table.insert(name)
+                        print(f"Nome '{name}' inserido com sucesso.")
+                        
             elif choice == 3:
                 print("Estrutura da Árvore B da tabela:")
                 table.print_tree()
+                print("Dados ordenados na tabela:")
+                print(table.inorder_traversal())
+                
             elif choice == 4:
                 old_key = input("Digite o valor antigo: ")
                 new_key = input("Digite o novo valor: ")
@@ -329,6 +352,7 @@ def main():
                     print(f"Registro {old_key} atualizado para {new_key}.")
                 else:
                     print("Registro não encontrado.")
+                    
             elif choice == 5:
                 key = input("Digite o valor a ser deletado: ")
                 table.delete(key)
@@ -362,6 +386,15 @@ def main():
             print("Avaliação de desempenho concluída. Gráfico salvo como 'performance.png'.")
         
         elif choice == 7:
+            table_name = input("Digite o nome da tabela: ")
+            table = db.get_table(table_name)
+            if table is None:
+                print("Tabela não encontrada.")
+            else:
+                filename = input("Digite o nome do arquivo para salvar os dados (com extensão .json): ")
+                table.save_to_file(filename)
+        
+        elif choice == 8:
             print("Saindo...")
             break
         else:
