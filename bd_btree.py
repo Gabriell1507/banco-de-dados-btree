@@ -354,9 +354,28 @@ def main():
                     print("Registro não encontrado.")
                     
             elif choice == 5:
-                key = input("Digite o valor a ser deletado: ")
-                table.delete(key)
-                print(f"Registro {key} deletado.")
+                delete_choice = int(input("\n1. Deletar um registro específico\n2. Deletar um número específico de registros\n3. Deletar todos os registros\nEscolha uma opção: "))
+
+                
+                if delete_choice == 1:
+                    key = input("Digite o valor a ser deletado: ")
+                    table.delete(key)
+                    print(f"Registro {key} deletado.")
+                
+                
+                elif delete_choice == 2:
+                    n = int(input("Quantos registros deseja deletar? "))
+                    keys_to_delete = table.inorder_traversal()[:n]
+                    for key in keys_to_delete:
+                        table.delete(key)
+                    print(f"{n} registros deletados.")
+                    
+                elif delete_choice == 3:
+                    for key in table.inorder_traversal():
+                        table.delete(key)
+                    print("Todos os registros foram deletados.")
+                else:
+                    print("Opção inválida.")
         
         elif choice == 6:
             # Usa a tabela padrão para avaliação de desempenho
