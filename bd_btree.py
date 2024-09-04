@@ -4,6 +4,7 @@ import tracemalloc
 from faker import Faker
 import matplotlib.pyplot as plt
 import json
+import os
 
 fake = Faker()
 
@@ -200,21 +201,29 @@ class BTree:
         return result
 
 class Table:
-    def __init__(self, name, btree_order):
+    def __init__(self, name, btree_order, json_filename=None):
         self.name = name
         self.btree = BTree(btree_order)
+        self.json_filename = json_filename
+        if json_filename:
+            self.load_from_file(json_filename)
 
     def insert(self, key):
         self.btree.insert(key)
+        self.save_to_file()
 
     def search(self, key):
         return self.btree.search(key)
 
     def update(self, old_key, new_key):
-        return self.btree.update(old_key, new_key)
+        success = self.btree.update(old_key, new_key)
+        if success:
+            self.save_to_file()
+        return success
 
     def delete(self, key):
         self.btree.delete(key)
+        self.save_to_file()
 
     def print_tree(self):
         self.btree.print_tree()
@@ -222,81 +231,92 @@ class Table:
     def inorder_traversal(self):
         return self.btree.inorder_traversal()
 
-    def save_to_file(self, filename):
-        with open(filename, 'w') as f:
-            json.dump(self.inorder_traversal(), f)
-        print(f"Dados salvos em {filename}")
+    def save_to_file(self, filename=None):
+        if filename is None:
+            filename = self.json_filename
+        if filename:
+            with open(filename, 'w') as f:
+                json.dump(self.inorder_traversal(), f)
+            print(f"Dados salvos em {filename}")
+
+    def load_from_file(self, filename):
+        if os.path.exists(filename):
+            with open(filename, 'r') as f:
+                data = json.load(f)
+                for key in data:
+                    self.btree.insert(key)
+            print(f"Dados carregados de {filename}")
+        else:
+            print(f"Arquivo {filename} não encontrado.")
 
 class Database:
     def __init__(self):
         self.tables = {}
 
-    def create_table(self, name, btree_order):
+    def create_table(self, name, btree_order, json_filename=None):
         if name not in self.tables:
-            self.tables[name] = Table(name, btree_order)
+            self.tables[name] = Table(name, btree_order, json_filename)
             print(f"Tabela '{name}' criada com sucesso.")
         else:
-            print(f"Tabela '{name}' já existe.")
+            print("Tabela já existe.")
 
     def get_table(self, name):
-        return self.tables.get(name, None)
+        return self.tables.get(name)
 
 def generate_random_data(n):
-    return [fake.unique.name() for _ in range(n)]
+    return [fake.name() for _ in range(n)]
 
-def format_time(seconds):
-    if seconds < 0.001:
-        return f"{seconds * 1_000_000:.2f} microssegundos"
-    elif seconds < 1:
-        return f"{seconds * 1_000:.2f} milissegundos"
-    elif seconds < 60:
-        return f"{seconds:.2f} segundos"
-    else:
-        return f"{seconds / 60:.2f} minutos"
-
-def measure_performance(table, operation, data, key=None, new_key=None):
+def measure_performance(table, operation, data, new_key=None):
     tracemalloc.start()
     start_time = time.time()
-    
     if operation == "INSERT":
-        for item in data:
-            table.insert(item)
+        for key in data:
+            table.insert(key)
     elif operation == "SELECT":
-        for item in data:
-            table.search(item)
+        for key in data:
+            table.search(key)
     elif operation == "UPDATE":
-        for item in data:
-            table.update(item, new_key)
+        for old_key in data:
+            table.update(old_key, new_key)
     elif operation == "DELETE":
-        for item in data:
-            table.delete(item)
-    
+        for key in data:
+            table.delete(key)
     end_time = time.time()
-    current, peak = tracemalloc.get_traced_memory()
+    snapshot = tracemalloc.take_snapshot()
+    top_stats = snapshot.statistics('lineno')
+    current, peak = 0, 0
+    for stat in top_stats:
+        current += stat.size
+        peak = max(peak, stat.size)
     tracemalloc.stop()
+    return end_time - start_time, current, peak
 
-    execution_time = end_time - start_time
-    return execution_time, current, peak
+def format_time(seconds):
+    if seconds < 1:
+        return f"{seconds * 1000:.2f} ms"
+    return f"{seconds:.2f} s"
 
 def plot_performance(sizes, times, operations):
     plt.figure(figsize=(10, 6))
     for operation in operations:
-        plt.plot(sizes, times[operation], label=operation)
-    plt.xlabel('Número de Registros')
-    plt.ylabel('Tempo (segundos)')
-    plt.title('Desempenho das Operações CRUD')
+        plt.plot(sizes, times[operation], marker='o', label=operation)
+    
+    plt.xlabel('Número de registros')
+    plt.ylabel('Tempo (s)')
+    plt.title('Desempenho das Operações na Árvore B')
     plt.legend()
     plt.grid(True)
-    plt.savefig('performance.png')
+    plt.savefig("performance.png")
     plt.show()
 
 def main():
     db = Database()
-    
+
     # Cria uma tabela padrão para avaliação de desempenho
     default_table_name = "default_table"
     default_btree_order = 3
-    db.create_table(default_table_name, default_btree_order)
+    default_json_filename = "default_table_data.json"
+    db.create_table(default_table_name, default_btree_order, default_json_filename)
     
     while True:
         print("\nEscolha uma operação:")
@@ -314,7 +334,9 @@ def main():
         if choice == 1:
             table_name = input("Digite o nome da tabela: ")
             btree_order = int(input("Digite a ordem da Árvore B: "))
-            db.create_table(table_name, btree_order)
+            json_filename = input("Digite o nome do arquivo JSON para salvar os dados (opcional, deixe em branco para não usar): ")
+            json_filename = json_filename if json_filename.strip() else None
+            db.create_table(table_name, btree_order, json_filename)
         
         elif choice in [2, 3, 4, 5]:
             table_name = input("Digite o nome da tabela: ")
@@ -356,12 +378,10 @@ def main():
             elif choice == 5:
                 delete_choice = int(input("\n1. Deletar um registro específico\n2. Deletar um número específico de registros\n3. Deletar todos os registros\nEscolha uma opção: "))
 
-                
                 if delete_choice == 1:
                     key = input("Digite o valor a ser deletado: ")
                     table.delete(key)
                     print(f"Registro {key} deletado.")
-                
                 
                 elif delete_choice == 2:
                     n = int(input("Quantos registros deseja deletar? "))
